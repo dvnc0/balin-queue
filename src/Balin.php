@@ -6,6 +6,7 @@ namespace Balin;
 use Balin\Database\Database_Interface;
 use Balin\Exceptions\Balin_Exception;
 use Balin\Database\Sqlite_Database;
+use Balin\Utilities\File;
 
 class Balin {
 	/**
@@ -20,7 +21,14 @@ class Balin {
 	 *
 	 * @var array
 	 */
-	protected array $config = [];
+	protected array $config = [
+		'path' => __DIR__ . '/data/balin',
+		'flag_file' => 'balin.flag',
+		'database' => [
+			'driver' => 'sqlite',
+			'name' => 'balin_queue.sqlite'
+		]
+	];
 
 	/**
 	 * The database instance
@@ -47,6 +55,8 @@ class Balin {
 
 	/**
 	 * Prevent from being constructed
+	 * 
+	 * @param array $config The configuration of Balin
 	 */
 	protected function __construct(array $config = []) {
 		$this->initializeBalin($config);
@@ -54,9 +64,9 @@ class Balin {
 	}
 
 	/**
-	 * Get the instance of Buoy
+	 * Get the instance of Balin
 	 * 
-	 * @param array $settings The settings of Buoy
+	 * @param array $settings The settings of Balin
 	 * @return Balin
 	 */
 	public static function load(array $config = []): Balin {
@@ -69,27 +79,21 @@ class Balin {
 	/**
 	 * Initialize Balin
 	 * 
+	 * @param array $config The configuration of Balin
+	 * 
 	 * @return void
 	 */
 	protected function initializeBalin(array $config): void {
-		$default_config = [
-			'path' => __DIR__ . '/data/balin',
-			'flag_file' => 'balin.flag',
-			'database' => [
-				'driver' => 'sqlite',
-				'name' => 'balin_queue.sqlite'
-			]
-		];
-
-		$this->config = array_merge($default_config, $config);
+		$this->config = array_merge($this->config, $config);
 		$this->config['path'] = rtrim($this->config['path'], '/');
 		$flag_path = $this->config['path'] . '/' . $this->config['flag_file'];
 
-		$this->database = new Sqlite_Database($this->config['path'], $this->config['database']['name']);
+		$File = new File;
+		$this->database = $this->getDatabaseInstance();
 
-		if (file_exists($flag_path) === false) {
+		if ($File->exists($flag_path) === false) {
 			$sql = <<<SQL
-			CREATE TABLE balin_queue (
+			CREATE TABLE IF NOT EXISTS balin_queue (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				task_name TEXT NOT NULL,
 				payload TEXT NOT NULL,
@@ -106,10 +110,21 @@ class Balin {
 			SQL;
 
 			$this->database->query($sql);
-
-			file_put_contents($flag_path, date('Y-m-d::H:i:s'));
+			$File->putContents($flag_path, date('Y-m-d::H:i:s'));
 		}
 		return;
+	}
+
+	/**
+	 * Get the database instance
+	 * 
+	 * @return Database_Interface
+	 */
+	protected function getDatabaseInstance(): Database_Interface {
+		return match($this->config['database']['driver']) {
+			'sqlite' => new Sqlite_Database($this->config['path'], $this->config['database']['name']),
+			default => throw new Balin_Exception('Invalid database driver')
+		};
 	}
 
 }
