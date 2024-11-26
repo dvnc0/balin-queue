@@ -7,6 +7,8 @@ use Balin\Database\Database_Interface;
 use Balin\Exceptions\Balin_Exception;
 use Balin\Database\Pdo_Database;
 use Balin\Utilities\File;
+use Balin\Workers\Sqlite_Worker;
+use Balin\Workers\Worker_Interface;
 
 class Balin {
 	/**
@@ -36,6 +38,13 @@ class Balin {
 	 * @var Database_Interface
 	 */
 	protected Database_Interface $database;
+
+	/**
+	 * The worker instance
+	 *
+	 * @var Worker_Interface
+	 */
+	protected Worker_Interface $worker;
 
 	/**
 	 * Prevent the instance from being cloned
@@ -90,28 +99,10 @@ class Balin {
 
 		$File = new File;
 		$this->database = $this->getDatabaseInstance();
+		$this->worker = $this->getWorkerInstance();
 
 		if ($File->exists($flag_path) === false) {
-			$sql = <<<SQL
-			CREATE TABLE IF NOT EXISTS balin_queue (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				task_name TEXT NOT NULL,
-				payload TEXT NOT NULL,
-				status TEXT NOT NULL DEFAULT 'pending',
-				priority INTEGER DEFAULT 0,
-				attempts INTEGER DEFAULT 0,
-				max_attempts INTEGER DEFAULT 3,
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				updated_at DATETIME,
-				scheduled_at DATETIME,
-				worker_id TEXT,
-				error_message TEXT,
-				locked INT DEFAULT 0,
-				is_active INT DEFAULT 1
-			);
-			SQL;
-
-			$this->database->query($sql);
+			$this->worker->createDatabase();
 			$File->putContents($flag_path, date('Y-m-d::H:i:s'));
 		}
 		return;
@@ -124,9 +115,66 @@ class Balin {
 	 */
 	protected function getDatabaseInstance(): Database_Interface {
 		return match($this->config['database']['driver']) {
-			'sqlite' => new Pdo_Database('sqlite:' . $this->config['path'] . '/' . $this->config['database']['name']),
+			'sqlite' => new Pdo_Database($this->config['database']['dsn']),
 			default => throw new Balin_Exception('Invalid database driver')
 		};
 	}
 
+	/**
+	 * Get the worker instance
+	 * 
+	 * @return Worker_Interface
+	 */
+	protected function getWorkerInstance(): Worker_Interface {
+		return match($this->config['database']['driver']) {
+			'sqlite' => new Sqlite_Worker($this->database),
+			default => throw new Balin_Exception('Invalid database driver')
+		};
+	}
+
+	/**
+	 * Insert a task into the queue
+	 * 
+	 * @param string $task_name The name of the task
+	 * @param array $payload The payload of the task
+	 * @param int $priority The priority of the task
+	 * @param int $max_attempts The maximum attempts of the task
+	 * @param string $scheduled_at The scheduled time of the task
+	 * 
+	 * @return void
+	 */
+	public function insertJob(string $task_name, array $payload, int $priority = 0, int $max_attempts = 3, string $scheduled_at = NULL): void {
+		$this->worker->insertJob($task_name, $payload, $priority, $max_attempts, $scheduled_at);
+	}
+
+	/**
+	 * Get the next record
+	 * 
+	 * @return array|null
+	 */
+	public function getNextJob(): array|null {
+		$worker_id = getmypid() . '_' . uniqid();
+		$job = $this->worker->getNextJob($worker_id);
+		return $job;
+	}
+
+	public function jobSuccess(int $id): void {
+		$this->worker->jobSuccess($id);
+		return;
+	}
+
+	public function jobFailure(int $id): void {
+		$this->worker->jobFailure($id);
+		return;
+	}
+
+	public function jobError(int $id, string $error_message): void {
+		$this->worker->jobError($id, $error_message);
+		return;
+	}
+
+	public function releaseLockedJobs(int $locked_max_time = 3600): void {
+		$this->worker->releaseLockedJobs($locked_max_time);
+		return;
+	}
 }
