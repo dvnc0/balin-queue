@@ -12,20 +12,32 @@ use PDOStatement;
 /**
  * The database class
  */
-class Sqlite_Database implements Database_Interface {
+class Pdo_Database implements Database_Interface {
+	/**
+	 * The connection to the database
+	 * 
+	 * @var PDO
+	 */
 	protected $connection;
-	public function __construct(string $database_path, string $database_name) {
-		$this->connect($database_path, $database_name);
+
+	/**
+	 * Construct the database
+	 * 
+	 * @param string $dsn The data source name
+	 */
+	public function __construct(string $dsn) {
+		$this->connect($dsn);
 	}
 
 	/**
 	 * Connect to the database
 	 * 
+	 * @param string $dsn The data source name
 	 * @return void
 	 */
-	public function connect($database_path, $database_name): void {
+	public function connect(string $dsn): void {
 		try {
-			$pdo = new PDO("sqlite:" . $database_path . '/' . $database_name);
+			$pdo = new PDO($dsn);
 
 			$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 			$this->connection = $pdo;
@@ -74,9 +86,9 @@ class Sqlite_Database implements Database_Interface {
 	/**
 	 * Get the last inserted id
 	 * 
-	 * @return int
+	 * @return string|bool
 	 */
-	public function lastInsertId(): int {
+	public function lastInsertId(): string|bool {
 		return $this->connection->lastInsertId();
 	}
 

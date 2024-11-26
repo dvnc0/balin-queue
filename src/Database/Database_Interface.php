@@ -12,7 +12,7 @@ interface Database_Interface {
 	 * 
 	 * @return void
 	 */
-	public function connect($database_path, $database_name): void;
+	public function connect(string $dsn): void;
 
 	/**
 	 * Execute a query
@@ -44,9 +44,9 @@ interface Database_Interface {
 	/**
 	 * get the last insert id
 	 *
-	 * @return string
+	 * @return string|bool
 	 */
-	public function lastInsertId(): int;
+	public function lastInsertId(): string|bool;
 
 	/**
 	 * Get the connection

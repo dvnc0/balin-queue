@@ -5,7 +5,7 @@ namespace Balin;
 
 use Balin\Database\Database_Interface;
 use Balin\Exceptions\Balin_Exception;
-use Balin\Database\Sqlite_Database;
+use Balin\Database\Pdo_Database;
 use Balin\Utilities\File;
 
 class Balin {
@@ -105,7 +105,9 @@ class Balin {
 				updated_at DATETIME,
 				scheduled_at DATETIME,
 				worker_id TEXT,
-				error_message TEXT
+				error_message TEXT,
+				locked INT DEFAULT 0,
+				is_active INT DEFAULT 1
 			);
 			SQL;
 
@@ -122,7 +124,7 @@ class Balin {
 	 */
 	protected function getDatabaseInstance(): Database_Interface {
 		return match($this->config['database']['driver']) {
-			'sqlite' => new Sqlite_Database($this->config['path'], $this->config['database']['name']),
+			'sqlite' => new Pdo_Database('sqlite:' . $this->config['path'] . '/' . $this->config['database']['name']),
 			default => throw new Balin_Exception('Invalid database driver')
 		};
 	}
