@@ -7,7 +7,7 @@ use Balin\Database\Pdo_Database;
 use Exception;
 use PDO;
 
-class Sqlite_Worker implements Worker_Interface {
+class Mysql_Worker implements Worker_Interface {
 	/**
 	 * The database instance
 	 *
@@ -32,26 +32,26 @@ class Sqlite_Worker implements Worker_Interface {
 	public function createDatabase(): void {
 		$sql = <<<SQL
 		CREATE TABLE IF NOT EXISTS balin_queue (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			task_name TEXT NOT NULL,
+			id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+			task_name VARCHAR(255) NOT NULL,
 			payload TEXT NOT NULL,
-			status TEXT NOT NULL DEFAULT 'pending',
-			priority INTEGER DEFAULT 99,
-			attempts INTEGER DEFAULT 0,
-			max_attempts INTEGER DEFAULT 3,
+			status ENUM('pending', 'processing', 'failed', 'success', 'error') NOT NULL DEFAULT 'pending',
+			priority INT DEFAULT 99,
+			attempts INT DEFAULT 0,
+			max_attempts INT DEFAULT 3,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME,
-			scheduled_at DATETIME,
-			worker_id TEXT,
-			error_message TEXT,
-			locked INT DEFAULT 0,
-			is_active INT DEFAULT 1
+			updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+			scheduled_at DATETIME DEFAULT NULL,
+			worker_id VARCHAR(255) DEFAULT NULL,
+			error_message TEXT DEFAULT NULL,
+			locked TINYINT(1) DEFAULT 0,
+			is_active TINYINT(1) DEFAULT 1
 		);
 
 		CREATE INDEX idx_task_name ON balin_queue (task_name);
 		CREATE INDEX idx_status_locked_active ON balin_queue (status, locked, is_active);
 		CREATE INDEX idx_priority_schedule_created ON balin_queue (priority ASC, scheduled_at ASC, created_at ASC);
-		
+
 		SQL;
 
 		$this->database->query($sql);
@@ -70,7 +70,7 @@ class Sqlite_Worker implements Worker_Interface {
 	 * 
 	 * @return void
 	 */
-	public function insertJob(string $task_name, array $payload, int $priority = 0, int $max_attempts = 3, string $scheduled_at = NULL): void {
+	public function insertJob(string $task_name, array $payload, int $priority = 99, int $max_attempts = 3, string $scheduled_at = NULL): void {
 		$sql = <<<SQL
 		INSERT INTO balin_queue (task_name, payload, priority, max_attempts, scheduled_at)
 		VALUES (:task_name, :payload, :priority, :max_attempts, :scheduled_at);
@@ -108,6 +108,7 @@ class Sqlite_Worker implements Worker_Interface {
 				AND (attempts < max_attempts OR max_attempts = 0)
 			ORDER BY priority ASC, scheduled_at ASC, created_at ASC
 			LIMIT 1
+			FOR UPDATE SKIP LOCKED
 			SQL;
 
 			$select_stmt = $pdo->prepare($sql);
@@ -125,7 +126,6 @@ class Sqlite_Worker implements Worker_Interface {
 				status = 'processing',
 				locked = 1,
 				worker_id = :worker_id,
-				updated_at = CURRENT_TIMESTAMP
 			WHERE id = :task_id
 			SQL;
 
@@ -136,14 +136,13 @@ class Sqlite_Worker implements Worker_Interface {
 			]);
 
 			$pdo->commit();
-
-			$task['payload'] = json_decode(unserialize($task['payload']), true);
-			
 			return $task;
+
 		} catch (Exception $e) {
 			$pdo->rollBack();
 			throw $e;
 		}
+
 	}
 
 	/**
@@ -171,7 +170,7 @@ class Sqlite_Worker implements Worker_Interface {
 				AND (attempts < max_attempts OR max_attempts = 0)
 			ORDER BY priority ASC, scheduled_at ASC, created_at ASC
 			LIMIT 1
-			FOR UPDATE
+			FOR UPDATE SKIP LOCKED
 			SQL;
 
 			$select_stmt = $pdo->prepare($sql);
@@ -220,7 +219,6 @@ class Sqlite_Worker implements Worker_Interface {
 			status = 'success',
 			locked = 0,
 			worker_id = NULL,
-			updated_at = CURRENT_TIMESTAMP,
 			is_active = 0
 		WHERE id = :id
 		SQL;
@@ -232,7 +230,7 @@ class Sqlite_Worker implements Worker_Interface {
 	/**
 	 * Mark the job as failure
 	 *
-	 * @param  integer $id
+	 * @param  integer $
 	 * @param  string|null $scheduled_at
 	 * @return void
 	 */
@@ -249,7 +247,6 @@ class Sqlite_Worker implements Worker_Interface {
 			END,
 			locked = 0,
 			worker_id = NULL,
-			updated_at = CURRENT_TIMESTAMP,
 			attempts = (attempts + 1),
 			$scheduled_for
 		WHERE id = :id;
@@ -273,7 +270,6 @@ class Sqlite_Worker implements Worker_Interface {
 			status = 'error',
 			locked = 0,
 			worker_id = NULL,
-			updated_at = CURRENT_TIMESTAMP,
 			error_message = :error_message
 		WHERE id = :id
 		SQL;
@@ -295,7 +291,6 @@ class Sqlite_Worker implements Worker_Interface {
 			status = 'pending',
 			locked = 0,
 			worker_id = NULL,
-			updated_at = CURRENT_TIMESTAMP
 		WHERE locked = 1
 			AND updated_at < (CURRENT_TIMESTAMP - :locked_max_time)
 		SQL;

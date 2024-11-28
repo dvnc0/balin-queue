@@ -1,7 +1,7 @@
 {    
-    "name": "dvnc0/balin-queue",
+    "name": "danc0/balin-queue",
     "type": "library",
-    "description": "A PHP sqlite based queue",
+    "description": "A simple PHP database based queue",
     "authors": [
         {
             "name": "dvnc0",

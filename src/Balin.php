@@ -7,6 +7,7 @@ use Balin\Database\Database_Interface;
 use Balin\Exceptions\Balin_Exception;
 use Balin\Database\Pdo_Database;
 use Balin\Utilities\File;
+use Balin\Workers\Mysql_Worker;
 use Balin\Workers\Sqlite_Worker;
 use Balin\Workers\Worker_Interface;
 
@@ -79,8 +80,20 @@ class Balin {
 	 * @return Balin
 	 */
 	public static function load(array $config = []): Balin {
-		if (NULL === static::$instance) {
+		if (null === static::$instance) {
 			static::$instance = new self($config);
+		}
+		return static::$instance;
+	}
+
+	/**
+	 * Get the instance of Balin
+	 * 
+	 * @return Balin
+	 */
+	public static function queue(): Balin {
+		if (null === static::$instance) {
+			throw new Balin_Exception('Balin is not initialized');
 		}
 		return static::$instance;
 	}
@@ -116,6 +129,7 @@ class Balin {
 	protected function getDatabaseInstance(): Database_Interface {
 		return match($this->config['database']['driver']) {
 			'sqlite' => new Pdo_Database($this->config['database']['dsn']),
+			'mysql' => new Pdo_Database($this->config['database']['dsn']),
 			default => throw new Balin_Exception('Invalid database driver')
 		};
 	}
@@ -128,6 +142,7 @@ class Balin {
 	protected function getWorkerInstance(): Worker_Interface {
 		return match($this->config['database']['driver']) {
 			'sqlite' => new Sqlite_Worker($this->database),
+			'mysql' => new Mysql_Worker($this->database),
 			default => throw new Balin_Exception('Invalid database driver')
 		};
 	}
@@ -143,7 +158,7 @@ class Balin {
 	 * 
 	 * @return void
 	 */
-	public function insertJob(string $task_name, array $payload, int $priority = 0, int $max_attempts = 3, string $scheduled_at = NULL): void {
+	public function push(string $task_name, array $payload, int $priority = 99, int $max_attempts = 3, string $scheduled_at = null): void {
 		$this->worker->insertJob($task_name, $payload, $priority, $max_attempts, $scheduled_at);
 	}
 
@@ -152,27 +167,68 @@ class Balin {
 	 * 
 	 * @return array|null
 	 */
-	public function getNextJob(): array|null {
-		$worker_id = getmypid() . '_' . uniqid();
-		$job = $this->worker->getNextJob($worker_id);
+	public function pop(): array|null {
+		$job = $this->worker->getNextJob();
 		return $job;
 	}
 
-	public function jobSuccess(int $id): void {
+	/**
+	 * Get the next task
+	 * 
+	 * @param string $task_name The name of the task
+	 * 
+	 * @return array|null
+	 */
+	public function popTask(string $task_name): array|null {
+		$job = $this->worker->getNextTask($task_name);
+		return $job;
+	}
+
+	/**
+	 * Job success
+	 * 
+	 * @param int $id The id of the job
+	 * 
+	 * @return void
+	 */
+	public function success(int $id): void {
 		$this->worker->jobSuccess($id);
 		return;
 	}
 
-	public function jobFailure(int $id): void {
-		$this->worker->jobFailure($id);
+	/**
+	 * Job failure
+	 * 
+	 * @param int $id The id of the job
+	 * @param string|null $scheduled_at The scheduled time of the job
+	 * 
+	 * @return void
+	 */
+	public function failure(int $id, string|null $scheduled_at = null): void {
+		$this->worker->jobFailure($id, $scheduled_at);
 		return;
 	}
 
-	public function jobError(int $id, string $error_message): void {
+	/**
+	 * Job error
+	 * 
+	 * @param int $id The id of the job
+	 * @param string $error_message The error message of the job
+	 * 
+	 * @return void
+	 */
+	public function error(int $id, string $error_message): void {
 		$this->worker->jobError($id, $error_message);
 		return;
 	}
 
+	/**
+	 * Release locked jobs
+	 * 
+	 * @param int $locked_max_time The maximum time of the locked job
+	 * 
+	 * @return void
+	 */
 	public function releaseLockedJobs(int $locked_max_time = 3600): void {
 		$this->worker->releaseLockedJobs($locked_max_time);
 		return;

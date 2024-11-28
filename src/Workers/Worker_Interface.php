@@ -33,6 +33,15 @@ interface Worker_Interface {
 	public function getNextJob(): array|null;
 
 	/**
+	 * Get the next task
+	 * 
+	 * @param string $task_name The name of the task
+	 * 
+	 * @return array|null
+	 */
+	public function getNextTask(string $task_name): array|null;
+
+	/**
 	 * Mark a job as successful
 	 *
 	 * @param  integer $id
@@ -44,9 +53,10 @@ interface Worker_Interface {
 	 * Mark a job as failed
 	 *
 	 * @param  integer $id
+	 * @param  string|null $scheduled_at
 	 * @return void
 	 */
-	public function jobFailure(int $id): void;
+	public function jobFailure(int $id, string|null $scheduled_at): void;
 
 	/**
 	 * Mark a job as errored
