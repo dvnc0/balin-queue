@@ -235,8 +235,8 @@ class Mysql_Worker implements Worker_Interface {
 	 * @return void
 	 */
 	public function jobFailure(int $id, string|null $scheduled_at): void {
-		$retry_at = $scheduled_at ?? 'CURRENT_TIMESTAMP';
-		$scheduled_for = 'scheduled_at = ' . $retry_at;
+		$retry_at = $scheduled_at ?? date('Y-m-d H:i:s');
+		$scheduled_for = "scheduled_at = '$retry_at'";
 		$sql = <<<SQL
 		UPDATE balin_queue
 		SET
