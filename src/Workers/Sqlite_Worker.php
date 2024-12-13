@@ -171,7 +171,6 @@ class Sqlite_Worker implements Worker_Interface {
 				AND (attempts < max_attempts OR max_attempts = 0)
 			ORDER BY priority ASC, scheduled_at ASC, created_at ASC
 			LIMIT 1
-			FOR UPDATE
 			SQL;
 
 			$select_stmt = $pdo->prepare($sql);
@@ -199,6 +198,8 @@ class Sqlite_Worker implements Worker_Interface {
 			]);
 
 			$pdo->commit();
+
+			$task['payload'] = json_decode(unserialize($task['payload']), true);
 			return $task;
 
 		} catch (Exception $e) {

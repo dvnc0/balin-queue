@@ -136,6 +136,7 @@ class Mysql_Worker implements Worker_Interface {
 			]);
 
 			$pdo->commit();
+			$task['payload'] = json_decode(unserialize($task['payload']), true);
 			return $task;
 
 		} catch (Exception $e) {
@@ -198,6 +199,7 @@ class Mysql_Worker implements Worker_Interface {
 			]);
 
 			$pdo->commit();
+			$task['payload'] = json_decode(unserialize($task['payload']), true);
 			return $task;
 
 		} catch (Exception $e) {
