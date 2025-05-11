@@ -125,7 +125,7 @@ class Mysql_Worker implements Worker_Interface {
 			SET
 				status = 'processing',
 				locked = 1,
-				worker_id = :worker_id,
+				worker_id = :worker_id
 			WHERE id = :task_id
 			SQL;
 
