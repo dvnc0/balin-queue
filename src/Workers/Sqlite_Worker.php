@@ -164,7 +164,7 @@ class Sqlite_Worker implements Worker_Interface {
 			FROM balin_queue
 			WHERE
 				task_name = :task_name
-				status = 'pending'
+				AND status = 'pending'
 				AND locked = 0
 				AND is_active = 1
 				AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
@@ -188,6 +188,7 @@ class Sqlite_Worker implements Worker_Interface {
 				status = 'processing',
 				locked = 1,
 				worker_id = :worker_id,
+				updated_at = CURRENT_TIMESTAMP
 			WHERE id = :task_id
 			SQL;
 

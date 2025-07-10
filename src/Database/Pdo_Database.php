@@ -16,9 +16,9 @@ class Pdo_Database implements Database_Interface {
 	/**
 	 * The connection to the database
 	 * 
-	 * @var PDO
+	 * @var PDO|null
 	 */
-	protected $connection;
+	protected ?PDO $connection = null;
 
 	/**
 	 * Construct the database
@@ -36,13 +36,27 @@ class Pdo_Database implements Database_Interface {
 	 * @return void
 	 */
 	public function connect(string $dsn): void {
-		try {
-			$pdo = new PDO($dsn);
+		if ($this->connection !== null) {
+			return;
+		}
 
-			$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-			$this->connection = $pdo;
-		} catch (PDOException $e) {
-			throw new Balin_Exception($e->getMessage());
+		$max_retries = 3;
+		$retry_delay = 1;
+		
+		for ($i = 0; $i < $max_retries; $i++) {
+			try {
+				$pdo = new PDO($dsn);
+				$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+				$pdo->setAttribute(PDO::ATTR_PERSISTENT, true);
+				$this->connection = $pdo;
+				return;
+			} catch (PDOException $e) {
+				if ($i === $max_retries - 1) {
+					throw new Balin_Exception($e->getMessage());
+				}
+				sleep($retry_delay);
+				$retry_delay *= 2;
+			}
 		}
 	}
 
@@ -108,6 +122,13 @@ class Pdo_Database implements Database_Interface {
 	 */
 	public function close(): void {
 		$this->connection = NULL;
+	}
+
+	/**
+	 * Destructor to clean up connections
+	 */
+	public function __destruct() {
+		$this->close();
 	}
 
 	/**
